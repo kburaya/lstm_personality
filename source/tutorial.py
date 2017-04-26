@@ -2,21 +2,30 @@ import sys
 sys.path.insert(0, '../source')
 import tensorflow as tf
 from tensorflow.contrib import rnn
-from pymongo import MongoClient
 import get_data
-import numpy as np
-from tensorflow.python import debug as tf_debug
+
+# Features dimensions
+TEXT_DIM = 53
+LIWC_DIM = 64
+LDA_DIM = 50
+LOCATION_DIM = 886
+
+# MBTI labels
+I_E = 0
+S_N = 1
+T_F = 2
+J_P = 3
 
 
 # Parameters
 learning_rate = 0.001
-training_iters = 5000
+training_iters = 500
 display_step = 1000
-input_dimension = 53
-output_dimension = 2
+input_dimension = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM #number of features
+output_dimension = 2 #number of labels
 n_hidden = 256
 n_input = 5
-batch_size = 32
+batch_size = 13
 
 x = tf.placeholder(tf.float32, [None, n_input, input_dimension])
 y = tf.placeholder(tf.float32, [None, output_dimension])
@@ -33,7 +42,7 @@ biases = {
 
 def RNN(x, weights, biases):
     rnn_cell = rnn.BasicLSTMCell(n_hidden)
-    rnn_cell = rnn.MultiRNNCell([rnn_cell] * 2)
+    # rnn_cell = rnn.MultiRNNCell([rnn_cell] * 2)
     rnn_cell = rnn.DropoutWrapper(rnn_cell, 0.8)
     x = tf.unstack(x, n_input, 1)
     outputs, states = rnn.static_rnn(rnn_cell, x, dtype=tf.float32)
@@ -54,12 +63,12 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 init = tf.global_variables_initializer()
 
 
-period_data = get_data.get_period_data(n_input, 'tweets', 'tweets_10_periods')
-input_data, output_data = get_data.input_output_generation(period_data, n_input, 'users', 'user-profiling', 0)
+period_data = get_data.get_period_data(n_input, ['tweetsMBTI', 'checkinsMBTI'], {'tweetsMBTI': ['text', 'liwc', 'lda'],
+                                                                 'checkinsMBTI': ['location']},
+                                       get_data.MONGO_DB, input_dimension)
+input_data, output_data = get_data.input_output_generation(period_data, n_input, 'users', get_data.MONGO_DB, J_P)
 train_input, train_output, test_input, test_output = get_data.split_data_to_train_test(input_data, output_data, n_input)
 with tf.Session() as session:
-    # session = tf_debug.LocalCLIDebugWrapperSession(session)
-    # session.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
     session.run(init)
     step = 0
     loss_total = 0
@@ -75,6 +84,6 @@ with tf.Session() as session:
               "{:.2f}%".format(100 * acc))
         step += 1
 
-    incorrect = session.run(accuracy,{x: test_input, y: test_output})
-    print('Epoch {:2d} error {:3.1f}%'.format(training_iters + 1, 100 * incorrect))
+    _, acc, loss, prediction = session.run([optimizer, accuracy, cost, pred],{x: test_input, y: test_output})
+    print('Epoch {:2d} Average Accuracy {:3.1f}%'.format(training_iters + 1, 100 * acc))
     session.close()
