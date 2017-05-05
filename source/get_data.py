@@ -4,6 +4,8 @@ import random
 from sklearn.decomposition import NMF
 import logging
 import hashlib
+import os
+import pickle
 
 ###
 # Mongo params
@@ -17,10 +19,10 @@ LIWC_DIM = 64
 LDA_DIM = 50
 LOCATION_DIM = 886
 MEDIA_DIM = 1000
-PERIODS = 10
+PERIODS = 5
 ###
 features_dim = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM
-logging.basicConfig(filename='get_data.log', level=logging.DEBUG)
+logging.basicConfig(filename='get_data.log', filemode='w+', level=logging.DEBUG, format='%(asctime)s %(message)s')
 hash_maker = hashlib.md5()
 
 
@@ -28,6 +30,17 @@ def connect_to_database(host, port, db_name):
     # connects to mongo
     client = MongoClient(host, port)
     return client[db_name]
+
+
+def download_window_data(window_size, mbti_position):
+    try:
+        train_input = pickle.load(open('../store/window_%d/train_input_%d.pkl' % (window_size, mbti_position), 'rb'))
+        train_output = pickle.load(open('../store/window_%d/train_output_%d.pkl' % (window_size, mbti_position), 'rb'))
+        test_input = pickle.load(open('../store/window_%d/test_input_%d.pkl' % (window_size, mbti_position), 'rb'))
+        test_output = pickle.load(open('../store/window_%d/test_output_%d.pkl' % (window_size, mbti_position), 'rb'))
+        return train_input, train_output, test_input, test_output
+    except:
+        raise FileNotFoundError('There is no prepared window data!')
 
 
 def get_period_data(n_periods, features_types, db, features_dim):
@@ -66,27 +79,6 @@ def get_period_data(n_periods, features_types, db, features_dim):
     return output
 
 
-def input_output_generation(period_features, n_periods, groundtruth_collection_name, db, mbti_position):
-    # get data from mongo and prepare it for neural network format
-    db = connect_to_database(MONGO_HOST, MONGO_PORT, db)
-    # mbti_position is what letter in mbti profile we want to predict
-    # outout_data will be 1/0
-    output_data = list()
-    # input data - list of lists of 53-dimensional vectors, one for each period
-    input_data = list()
-    for p in range(0, n_periods):
-        input_data.append(list())
-
-    for period in range(0, n_periods):
-        for user in period_features:
-            input_data[period].append(period_features[user][period])
-    for user in period_features:
-        user_data = db[groundtruth_collection_name].find_one({'twitterUserName': user})
-        output_data.append(convert_mbti_to_vector(user_data['mbti'], mbti_position))
-
-    return input_data, output_data
-
-
 def convert_mbti_to_vector(mbti, mbti_position):
     # convert mbti to 4-dimensional vector representation
     # I S T J -> 0
@@ -112,31 +104,30 @@ def convert_mbti_to_vector(mbti, mbti_position):
     return mbti_vector[mbti_position]
 
 
-def split_data_to_train_test(input_data, output_data, n_periods, threshold=0.9):
-    random_state = np.random.rand(len(input_data[0]))
-
-    input_train, output_train, input_test, output_test = list(), list(), list(), list()
-
-    for i in range(1, len(random_state)):
-        period_features = list()
-        for p in range(0, n_periods):
-            period_features.append(input_data[p][i])
-        if random_state[i] < threshold:
-            input_train.append(period_features)
-            output_train.append(output_data[i])
-        else:
-            input_test.append(period_features)
-            output_test.append(output_data[i])
-
-    return input_train, output_train, input_test, output_test
+def split_data_to_train_test():
+    # split ALL users (table: users) into train(0.8) and test(0.2) sets based on the distribution of their MBTI
+    db = connect_to_database(MONGO_HOST, MONGO_PORT, MONGO_DB_RESTORE)
+    mbti_types = db['users'].distinct('mbti')
+    for mbti in mbti_types:
+        users = db['users'].find({'mbti': mbti})
+        randoms = list()
+        for i in range(users.count()):
+            randoms.append(random.uniform(0, 1))
+        for (user, p) in zip(users, randoms):
+            if p < 0.8:
+                user['set'] = 'train'
+            else:
+                user['set'] = 'test'
+            db['users'].update({'_id': user['_id']}, user)
 
 
-def get_batch(input_data, output_data, batch_size):
-    indexes = random.sample(range(0, len(input_data)), batch_size)
+def get_batch(input_data, output_data, batch_size, periods):
+    indexes = random.sample(range(0, len(input_data[0])), batch_size)
     input_batch, output_batch = list(), list()
 
     for i in indexes:
-        input_batch.append(input_data[i])
+        for p in range(periods):
+            input_batch.append(input_data[p][i])
         output_batch.append(output_data[i])
 
     return input_batch, output_batch
@@ -214,67 +205,101 @@ def store_modalities_in_one_vector(modalities, period):
         db['period_%d' % period].insert(user_vector)
 
 
-def divide_train_test_sets_disjoint(n_periods):
-    # find users, that posts in every window of [n_periods] periods
-    # 1 2 3 4 -> from this will return all users that posts in [1, 2], [3, 4].
-    # will give md5(user_id) for every user to avoid the duplication of ids
-    # will store all users in collections with names [train/test]_[n_periods]_[p from 1 to n_periods]
-    db = connect_to_database(MONGO_HOST, MONGO_PORT, MONGO_DB_RESTORE)
+def input_output_generation(train_input, test_input, train_output, test_output, n_periods):
+    # get data from train/test inputs and prepare it for LSTM format
+    # input data - list of lists of vectors, one for each period
+    train_i, test_i = list(), list()
+    train_o, test_o = list(), list()
+    for p in range(0, n_periods):
+        train_i.append(list())
+        test_i.append(list())
 
+    for period in range(0, n_periods):
+        for user in train_input:
+            train_i[period].append(train_input[user][period + 1])
+        train_o.append(train_output[user])
+    for period in range(0, n_periods):
+        for user in test_input:
+            test_i[period].append(test_input[user][period + 1])
+        test_o.append(test_output[user])
+
+    return train_i, test_i, train_o, test_o
+
+
+def get_train_test_windows(n_periods, mbti_position, store=True):
+    try:
+        return download_window_data(n_periods, mbti_position)
+    except FileNotFoundError:
+        logging.info("There is no prepared data for window-periods")
+    # find users, that posts in every window of [n_periods] periods
+    # 1 2 3 4 -> from this will return all users that posts in [1, 2], [2, 3].
+    # will give md5(user_id) for every user to avoid the duplication of ids
+    # will return test/train sets for period windows
+    db = connect_to_database(MONGO_HOST, MONGO_PORT, MONGO_DB_RESTORE)
     users_mapping = dict()  # map md5(user) -> user
-    all_users_groundtruth = dict()  # dict md5(user) -> MBTI
-    all_users = dict()  # dict md5(user) -> dict period -> features
+    train_output, test_output = dict(), dict()  # dict md5(user) -> MBTI_vector
+    train_input, test_input = dict(), dict()  # dict md5(user) -> dict period -> features
 
     # get all users
-    for i in range(1, PERIODS + 1):
-        if i + n_periods > PERIODS:
+    for i in range(1, PERIODS):
+        if i + n_periods > PERIODS + 1:
             break
         window_users = dict()
         for p in range(0, n_periods):
             period_users = db['period_%d' % (i + p)].find()
             for user in period_users:
-                if user not in window_users:
-                    dict[user] = 1
+                if user['_id'] not in window_users:
+                    window_users[user['_id']] = 1
                 else:
-                    dict[user] += 1
+                    window_users[user['_id']] += 1
 
         for user in window_users:
             if window_users[user] != n_periods:
                 continue
-            new_id = hashlib.md5(user).hexdigest()
+            new_id = hashlib.md5(user.encode('utf-8')).hexdigest()
             users_mapping[new_id] = user
-            all_users_groundtruth[new_id] = db['users'].find_one({'twitterUserName': user})['MBTI']
-            all_users[new_id] = dict()
-            for p in range(1, n_periods+1):
-                all_users[new_id][p] = db['period_%d'].find_one({'_id': user})
+            user = db['users'].find_one({'twitterUserName': user})
+            if user['set'] == 'train':
+                train_input[new_id] = dict()
+                train_output[new_id] = dict()
+                for p in range(1, n_periods + 1):
+                    train_input[new_id][p] = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
+                    del train_input[new_id][p]['_id']
+                    train_output[new_id] = convert_mbti_to_vector(user['mbti'], mbti_position)
+            else:
+                test_input[new_id] = dict()
+                test_output[new_id] = dict()
+                for p in range(1, n_periods + 1):
+                    test_input[new_id][p] = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
+                    del test_input[new_id][p]['_id']
+                    test_output[new_id] = convert_mbti_to_vector(user['mbti'], mbti_position)
 
-        i += n_periods
+    logging.info("Found {%d} train samples, {%d} test samples for {%d} period-window" %
+                 (len(train_input), len(test_output), n_periods))
 
-    # divide users into test and train
-    train_size, test_size = 0, 0
-    for user in all_users_groundtruth:
-        random = random.uniform(0, 1)
-        if random <= 0.8:
-            user['set'] = 'train'
-            train_size += 1
-        else:
-            user['set'] = 'test'
-            test_size += 1
-    logging.info("Train size [%d], test size [%d], total users [%d]" %
-                 train_size, test_size, train_size + test_size)
-    db['period_%d_users'].insert(all_users_groundtruth)
-    return
+    train_input, test_input, train_output, test_output = input_output_generation(train_input, test_input,
+                                                                                 train_output, test_output, n_periods)
+    if store:
+        logging.info('Saving data...')
+        if not os.path.exists('../store/window_%d' % n_periods):
+            os.makedirs('../store/window_%d' % n_periods)
+        pickle.dump(train_input, open('../store/window_%d/train_input_%d.pkl' % (n_periods, mbti_position), 'wb', -1))
+        pickle.dump(train_output, open('../store/window_%d/train_output_%d.pkl' % (n_periods, mbti_position), 'wb', -1))
+        pickle.dump(test_input, open('../store/window_%d/test_input_%d.pkl' % (n_periods, mbti_position), 'wb', -1))
+        pickle.dump(test_output, open('../store/window_%d/test_output_%d.pkl' % (n_periods, mbti_position), 'wb', -1))
+        logging.info('Data successfully saved')
+    return train_input, test_input, train_output, test_output
 
 
 def main(args):
-    periods = args[0]
+    periods = args
     for period in periods:
         fill_missed_modality(period)
         store_modalities_in_one_vector(['text', 'liwc', 'lda', 'location', 'media'], period)
 
-if __name__ == "__main__":
-    main([2, 3, 4, 5, 6, 7, 8, 9, 10])
 
-# period_data = get_period_data(2, 'tweets', 'tweets_10_periods')
-# input_data, output_data = input_output_generation(period_data, 2, 'users', 'user-profiling', 1)
-# train_input, train_output, test_input, test_output = split_data_to_train_test(input_data, output_data, 2)
+if __name__ == "__main__":
+    # main([2, 3, 4, 5, 6, 7, 8, 9, 10])
+    # split_data_to_train_test()
+    get_train_test_windows(5, 0)
+

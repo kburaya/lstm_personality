@@ -19,12 +19,12 @@ J_P = 3
 
 # Parameters
 learning_rate = 0.001
-training_iters = 500
+training_iters = 10000
 display_step = 1000
-input_dimension = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM #number of features
-output_dimension = 2 #number of labels
+input_dimension = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM  # number of features
+output_dimension = 2  # number of labels
 n_hidden = 256
-n_input = 5
+n_input = 5  # number of time periods
 batch_size = 13
 
 x = tf.placeholder(tf.float32, [None, n_input, input_dimension])
@@ -62,12 +62,7 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 # Initializing the variables
 init = tf.global_variables_initializer()
 
-
-period_data = get_data.get_period_data(n_input, ['tweetsMBTI', 'checkinsMBTI'], {'tweetsMBTI': ['text', 'liwc', 'lda'],
-                                                                 'checkinsMBTI': ['location']},
-                                       get_data.MONGO_DB, input_dimension)
-input_data, output_data = get_data.input_output_generation(period_data, n_input, 'users', get_data.MONGO_DB, J_P)
-train_input, train_output, test_input, test_output = get_data.split_data_to_train_test(input_data, output_data, n_input)
+train_input, train_output, test_input, test_output = get_data.get_train_test_windows(n_input, 0)
 with tf.Session() as session:
     session.run(init)
     step = 0
@@ -75,13 +70,13 @@ with tf.Session() as session:
     acc_total = 0
     offset = 0
     while step < training_iters:
-        input_batch, output_batch = get_data.get_batch(train_input, train_output, batch_size)
+        input_batch, output_batch = get_data.get_batch(train_input, train_output, batch_size, n_input)
         _, acc, loss, prediction = session.run([optimizer, accuracy, cost, pred], \
                                                 feed_dict={x: input_batch, y: output_batch})
-
-        print("Iter= " + str(step + 1) + ", Average Loss= " + \
-              "{:.6f}".format(loss) + ", Average Accuracy= " + \
-              "{:.2f}%".format(100 * acc))
+        if step % display_step == 0:
+            print("Iter= " + str(step + 1) + ", Average Loss= " + \
+                  "{:.6f}".format(loss) + ", Average Accuracy= " + \
+                  "{:.2f}%".format(100 * acc))
         step += 1
 
     _, acc, loss, prediction = session.run([optimizer, accuracy, cost, pred],{x: test_input, y: test_output})
