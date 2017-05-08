@@ -42,9 +42,12 @@ class LSTM_model:
         self.label = label
 
     def RNN(self):
-        rnn_cell = rnn.BasicLSTMCell(self.n_hidden)
-        if self.multi_layer:
-            rnn_cell = rnn.MultiRNNCell([rnn_cell] * 2)
+        if not self.multi_layer:
+            rnn_cell = rnn.BasicLSTMCell(self.n_hidden)
+        else:
+            rnn_cell_f = rnn.BasicLSTMCell(self.n_hidden)
+            rnn_cell_s = rnn.BasicLSTMCell(self.n_hidden)
+            rnn_cell = rnn.MultiRNNCell([rnn_cell_f, rnn_cell_s])
         rnn_cell = rnn.DropoutWrapper(rnn_cell, 0.8)
         x = tf.unstack(self.x, self.n_input, 1)
         outputs, states = rnn.static_rnn(rnn_cell, x, dtype=tf.float32)
