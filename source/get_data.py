@@ -265,6 +265,10 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
             new_id = hashlib.md5(user.encode('utf-8')).hexdigest()
             users_mapping[new_id] = user
             user = db['users'].find_one({'twitterUserName': user})
+            if user is None:
+                logging.error('Find None user %s' % user)
+                continue
+
             if user['set'] == 'train':
                 train_input[new_id] = dict()
                 train_output[new_id] = dict()
