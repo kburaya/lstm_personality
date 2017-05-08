@@ -81,16 +81,19 @@ class LSTM_model:
             step = 0
             while step < self.training_iters:
                 input_batch, output_batch = get_data.get_batch(train_input, train_output, batch_size)
-                _, acc, loss, prediction = session.run([self.optimizer, self.accuracy, self.cost, self.pred], \
-                                                       feed_dict={self.x: input_batch, self.y: output_batch})
+                session.run([self.optimizer], \
+                            feed_dict={self.x: input_batch, self.y: output_batch})
                 if step % self.display_step == 0:
+                    # Calculate batch accuracy
+                    acc = session.run(self.accuracy, feed_dict={self.x: input_batch, self.y: output_batch})
+                    # Calculate batch loss
+                    loss = session.run(self.cost, feed_dict={self.x: input_batch, self.y: output_batch})
                     self.logger.info("Iter= " + str(step + 1) + ", Average Loss= " + \
                                      "{:.6f}".format(loss) + ", Average Accuracy= " + \
                                      "{:.2f}%".format(100 * acc))
                 step += 1
 
-            _, acc, loss, prediction = session.run([self.optimizer, self.accuracy, self.cost, self.pred],
-                                                   {self.x: test_input, self.y: test_output})
+            acc = session.run([self.accuracy], {self.x: test_input, self.y: test_output})
             self.logger.info(
                 'Epoch {:2d} Average Accuracy on test set {:3.1f}%'.format(self.training_iters + 1, 100 * acc))
             session.close()

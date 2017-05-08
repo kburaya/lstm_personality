@@ -22,10 +22,12 @@ def main(args):
     n_hidden = int(args[0])
     windows_size = int(args[1])
     learning_rate = float(args[2])
-    if int(args[3]) == 1: multi_layer = True
-    else: multi_layer = False
+    if int(args[3]) == 1:
+        multi_layer = True
+    else:
+        multi_layer = False
     training_iters = [5000, 10000, 15000]
-    batch_sizes = [7, 14, 21]
+    batch_sizes = [16, 32, 64, 128]
 
     model = LSTM_model(learning_rate=learning_rate,
                        n_hidden=n_hidden,
