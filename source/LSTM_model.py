@@ -7,24 +7,22 @@ import get_data
 import logging
 
 class LSTM_model:
-    def __init__(self, learning_rate, training_iters, display_step, input_dimension, output_dimension,
-                 n_hidden, n_input, batch_size, label, multi_layer=False):
-        # technical detales
+    def __init__(self, learning_rate, n_hidden, n_input, input_dimension,
+                 output_dimension, display_step=1000, multi_layer=False):
+        # technical detailes
         self.logger = logging.getLogger('LSTM_logger')
         self.MBTI_labels = ['E_I', 'S_N', 'T_F', 'J_P']
-
+        self.n_hidden = n_hidden
         self.learning_rate = learning_rate
-        self.training_iters = training_iters
+
+        self.training_iters = None
         self.display_step = display_step
         self.input_dimension = input_dimension  # number of features
         self.output_dimension = output_dimension  # number of labels
-        self.n_hidden = n_hidden
-        self.n_input = n_input  # number of time periods
-        self.batch_size = batch_size
-        self.multi_layer = multi_layer
-        self.label = label
 
-        self.logger.info('Model for %s label' % self.MBTI_labels[label])
+        self.n_input = n_input  # number of time periods
+        self.batch_size = None
+        self.multi_layer = multi_layer
 
         self.x = tf.placeholder(tf.float32, [None, self.n_input, self.input_dimension])
         self.y = tf.placeholder(tf.float32, [None, self.output_dimension])
@@ -37,6 +35,11 @@ class LSTM_model:
             'out': tf.Variable(tf.random_normal([self.output_dimension]))
         }
         self.pred, self.cost, self.optimizer, self.accuracy = self.set_optimizers()
+
+    def update_params(self, training_iters, batch_size, label):
+        self.training_iters = training_iters
+        self.batch_size = batch_size
+        self.label = label
 
     def RNN(self):
         rnn_cell = rnn.BasicLSTMCell(self.n_hidden)
@@ -68,6 +71,7 @@ class LSTM_model:
                          'is_multi_layer=%s\n'
                          'label=%s' % (str(self.learning_rate), self.training_iters, self.n_hidden, self.n_input,
                                        self.batch_size, str(self.multi_layer), self.MBTI_labels[self.label]))
+        # tf.reset_default_graph()
         init = tf.global_variables_initializer()
         with tf.Session() as session:
             session.run(init)
