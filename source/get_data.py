@@ -268,7 +268,7 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
             if user['set'] == 'train':
                 train_input[new_id] = dict()
                 train_output[new_id] = dict()
-                for p in range(1, n_periods + 1):
+                for p in range(i, i + n_periods):
                     features = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
                     train_input[new_id][p] = list()
                     for feature in features:
@@ -278,7 +278,7 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
             else:
                 test_input[new_id] = dict()
                 test_output[new_id] = dict()
-                for p in range(1, n_periods + 1):
+                for p in range(i, i + n_periods):
                     features = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
                     test_input[new_id][p] = list()
                     for feature in features:
