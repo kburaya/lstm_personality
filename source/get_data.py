@@ -244,7 +244,7 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
     users_mapping = dict()  # map md5(user) -> user
     train_output, test_output = dict(), dict()  # dict md5(user) -> MBTI_vector
     train_input, test_input = dict(), dict()  # dict md5(user) -> dict period -> features
-
+    logging.info('Begin to collect data for %d-windows' % n_periods)
     # get all users
     for i in range(1, PERIODS):
         if i + n_periods > PERIODS + 1:
@@ -272,23 +272,27 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
             if user['set'] == 'train':
                 train_input[new_id] = dict()
                 train_output[new_id] = dict()
+                window_period = 1
                 for p in range(i, i + n_periods):
                     features = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
-                    train_input[new_id][p] = list()
+                    train_input[new_id][window_period] = list()
                     for feature in features:
                         if feature != '_id':
-                            train_input[new_id][p].append(features[feature])
-                    train_output[new_id] = convert_mbti_to_vector(user['mbti'], mbti_position)
+                            train_input[new_id][window_period].append(features[feature])
+                    window_period += 1
+                train_output[new_id] = convert_mbti_to_vector(user['mbti'], mbti_position)
             else:
                 test_input[new_id] = dict()
                 test_output[new_id] = dict()
+                window_period = 1
                 for p in range(i, i + n_periods):
                     features = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
-                    test_input[new_id][p] = list()
+                    test_input[new_id][window_period] = list()
                     for feature in features:
                         if feature != '_id':
-                            test_input[new_id][p].append(features[feature])
-                    test_output[new_id] = convert_mbti_to_vector(user['mbti'], mbti_position)
+                            test_input[new_id][window_period].append(features[feature])
+                    window_period += 1
+                test_output[new_id] = convert_mbti_to_vector(user['mbti'], mbti_position)
 
     logging.info("Found {%d} train samples, {%d} test samples for {%d} period-window" %
                  (len(train_input), len(test_output), n_periods))
