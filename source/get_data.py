@@ -22,7 +22,7 @@ MEDIA_DIM = 1000
 PERIODS = 10
 ###
 features_dim = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM
-logging.basicConfig(filename='get_data.log', filemode='w+', level=logging.DEBUG, format='%(asctime)s %(message)s')
+logging.basicConfig(filename='get_data.log', filemode='w', level=logging.DEBUG, format='%(asctime)s %(message)s')
 hash_maker = hashlib.md5()
 
 

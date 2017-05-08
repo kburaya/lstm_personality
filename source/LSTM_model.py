@@ -5,7 +5,6 @@ import tensorflow as tf
 from tensorflow.contrib import rnn
 import get_data
 import logging
-logging.basicConfig(filename='lstm_model.log', filemode='w+', level=logging.DEBUG, format='%(asctime)s %(message)s')
 
 class LSTM_model:
     def __init__(self, learning_rate, training_iters, display_step, input_dimension, output_dimension,
