@@ -3,6 +3,7 @@ sys.path.insert(0, '../source')
 import tensorflow as tf
 from tensorflow.contrib import rnn
 import get_data
+import logging
 
 # Features dimensions
 TEXT_DIM = 53
@@ -28,6 +29,9 @@ n_hidden = 256
 n_input = 2  # number of time periods
 batch_size = 15
 
+# logging.info('Run LSTM with {%d} training_iters, \n{%d} output_dimension, \n{%d} n_hidden layers, \n{%d} periods, \n{%d} batch_size' %
+#              (training_iters, output_dimension, n_hidden, n_input, batch_size))
+
 x = tf.placeholder(tf.float32, [None, n_input, input_dimension])
 y = tf.placeholder(tf.float32, [None, output_dimension])
 
@@ -41,9 +45,10 @@ biases = {
 }
 
 
-def RNN(x, weights, biases):
+def RNN(x, weights, biases, multi_layer = False):
     rnn_cell = rnn.BasicLSTMCell(n_hidden)
-    # rnn_cell = rnn.MultiRNNCell([rnn_cell] * 2)
+    if multi_layer:
+        rnn_cell = rnn.MultiRNNCell([rnn_cell] * 2)
     rnn_cell = rnn.DropoutWrapper(rnn_cell, 0.8)
     x = tf.unstack(x, n_input, 1)
     outputs, states = rnn.static_rnn(rnn_cell, x, dtype=tf.float32)
