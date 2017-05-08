@@ -9,6 +9,7 @@ TEXT_DIM = 53
 LIWC_DIM = 64
 LDA_DIM = 50
 LOCATION_DIM = 886
+MEDIA_DIM = 1000
 
 # MBTI labels
 I_E = 0
@@ -21,11 +22,11 @@ J_P = 3
 learning_rate = 0.001
 training_iters = 10000
 display_step = 1000
-input_dimension = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM  # number of features
+input_dimension = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM + MEDIA_DIM  # number of features
 output_dimension = 2  # number of labels
 n_hidden = 256
-n_input = 5  # number of time periods
-batch_size = 13
+n_input = 2  # number of time periods
+batch_size = 15
 
 x = tf.placeholder(tf.float32, [None, n_input, input_dimension])
 y = tf.placeholder(tf.float32, [None, output_dimension])
@@ -62,7 +63,7 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 # Initializing the variables
 init = tf.global_variables_initializer()
 
-train_input, train_output, test_input, test_output = get_data.get_train_test_windows(n_input, 0)
+train_input, test_input, train_output, test_output = get_data.get_train_test_windows(n_input, 0)
 with tf.Session() as session:
     session.run(init)
     step = 0
@@ -70,7 +71,7 @@ with tf.Session() as session:
     acc_total = 0
     offset = 0
     while step < training_iters:
-        input_batch, output_batch = get_data.get_batch(train_input, train_output, batch_size, n_input)
+        input_batch, output_batch = get_data.get_batch(train_input, train_output, batch_size)
         _, acc, loss, prediction = session.run([optimizer, accuracy, cost, pred], \
                                                 feed_dict={x: input_batch, y: output_batch})
         if step % display_step == 0:
@@ -80,5 +81,5 @@ with tf.Session() as session:
         step += 1
 
     _, acc, loss, prediction = session.run([optimizer, accuracy, cost, pred],{x: test_input, y: test_output})
-    print('Epoch {:2d} Average Accuracy {:3.1f}%'.format(training_iters + 1, 100 * acc))
+    print('Epoch {:2d} Average Accuracy on test set {:3.1f}%'.format(training_iters + 1, 100 * acc))
     session.close()

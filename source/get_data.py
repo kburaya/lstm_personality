@@ -19,7 +19,7 @@ LIWC_DIM = 64
 LDA_DIM = 50
 LOCATION_DIM = 886
 MEDIA_DIM = 1000
-PERIODS = 5
+PERIODS = 10
 ###
 features_dim = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM
 logging.basicConfig(filename='get_data.log', filemode='w+', level=logging.DEBUG, format='%(asctime)s %(message)s')
@@ -38,7 +38,7 @@ def download_window_data(window_size, mbti_position):
         train_output = pickle.load(open('../store/window_%d/train_output_%d.pkl' % (window_size, mbti_position), 'rb'))
         test_input = pickle.load(open('../store/window_%d/test_input_%d.pkl' % (window_size, mbti_position), 'rb'))
         test_output = pickle.load(open('../store/window_%d/test_output_%d.pkl' % (window_size, mbti_position), 'rb'))
-        return train_input, train_output, test_input, test_output
+        return train_input, test_input, train_output, test_output
     except:
         raise FileNotFoundError('There is no prepared window data!')
 
@@ -50,6 +50,7 @@ def get_period_data(n_periods, features_types, db, features_dim):
     periods_data = dict()
     db = connect_to_database(MONGO_HOST, MONGO_PORT, db)
     for period_number in range(1, n_periods + 1):
+        logging.info('Getting data for {%d} period in begin' % period_number)
         period_flags = list()
         for features_type in features_types:
             collection = 'MBTI_%d_%s' % (period_number, features_type)
@@ -121,13 +122,12 @@ def split_data_to_train_test():
             db['users'].update({'_id': user['_id']}, user)
 
 
-def get_batch(input_data, output_data, batch_size, periods):
-    indexes = random.sample(range(0, len(input_data[0])), batch_size)
+def get_batch(input_data, output_data, batch_size):
+    indexes = random.sample(range(0, len(input_data)), batch_size)
     input_batch, output_batch = list(), list()
 
     for i in indexes:
-        for p in range(periods):
-            input_batch.append(input_data[p][i])
+        input_batch.append(input_data[i])
         output_batch.append(output_data[i])
 
     return input_batch, output_batch
@@ -210,18 +210,23 @@ def input_output_generation(train_input, test_input, train_output, test_output, 
     # input data - list of lists of vectors, one for each period
     train_i, test_i = list(), list()
     train_o, test_o = list(), list()
-    for p in range(0, n_periods):
-        train_i.append(list())
-        test_i.append(list())
+    users_num = 0
 
-    for period in range(0, n_periods):
-        for user in train_input:
-            train_i[period].append(train_input[user][period + 1])
+    logging.info('Generation train/test input/output')
+    for user in train_input:
+        train_i.append(list())
+        for period in range(0, n_periods):
+            train_i[len(train_i) - 1].append(train_input[user][period + 1])
         train_o.append(train_output[user])
-    for period in range(0, n_periods):
-        for user in test_input:
-            test_i[period].append(test_input[user][period + 1])
+        users_num += 1
+
+    users_num = 0
+    for user in test_input:
+        test_i.append(list())
+        for period in range(0, n_periods):
+            test_i[users_num].append(test_input[user][period + 1])
         test_o.append(test_output[user])
+        users_num += 1
 
     return train_i, test_i, train_o, test_o
 
@@ -244,6 +249,7 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
     for i in range(1, PERIODS):
         if i + n_periods > PERIODS + 1:
             break
+        logging.info('Getting data for %d period in the beginning' % i)
         window_users = dict()
         for p in range(0, n_periods):
             period_users = db['period_%d' % (i + p)].find()
@@ -263,15 +269,21 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
                 train_input[new_id] = dict()
                 train_output[new_id] = dict()
                 for p in range(1, n_periods + 1):
-                    train_input[new_id][p] = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
-                    del train_input[new_id][p]['_id']
+                    features = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
+                    train_input[new_id][p] = list()
+                    for feature in features:
+                        if feature != '_id':
+                            train_input[new_id][p].append(features[feature])
                     train_output[new_id] = convert_mbti_to_vector(user['mbti'], mbti_position)
             else:
                 test_input[new_id] = dict()
                 test_output[new_id] = dict()
                 for p in range(1, n_periods + 1):
-                    test_input[new_id][p] = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
-                    del test_input[new_id][p]['_id']
+                    features = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
+                    test_input[new_id][p] = list()
+                    for feature in features:
+                        if feature != '_id':
+                            test_input[new_id][p].append(features[feature])
                     test_output[new_id] = convert_mbti_to_vector(user['mbti'], mbti_position)
 
     logging.info("Found {%d} train samples, {%d} test samples for {%d} period-window" %
@@ -283,11 +295,12 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
         logging.info('Saving data...')
         if not os.path.exists('../store/window_%d' % n_periods):
             os.makedirs('../store/window_%d' % n_periods)
-        pickle.dump(train_input, open('../store/window_%d/train_input_%d.pkl' % (n_periods, mbti_position), 'wb', -1))
-        pickle.dump(train_output, open('../store/window_%d/train_output_%d.pkl' % (n_periods, mbti_position), 'wb', -1))
-        pickle.dump(test_input, open('../store/window_%d/test_input_%d.pkl' % (n_periods, mbti_position), 'wb', -1))
-        pickle.dump(test_output, open('../store/window_%d/test_output_%d.pkl' % (n_periods, mbti_position), 'wb', -1))
+        pickle.dump(train_input, open('../store/window_%d/train_input_%d.pkl' % (n_periods, mbti_position), 'wb'))
+        pickle.dump(train_output, open('../store/window_%d/train_output_%d.pkl' % (n_periods, mbti_position), 'wb'))
+        pickle.dump(test_input, open('../store/window_%d/test_input_%d.pkl' % (n_periods, mbti_position), 'wb'))
+        pickle.dump(test_output, open('../store/window_%d/test_output_%d.pkl' % (n_periods, mbti_position), 'wb'))
         logging.info('Data successfully saved')
+
     return train_input, test_input, train_output, test_output
 
 
@@ -298,8 +311,8 @@ def main(args):
         store_modalities_in_one_vector(['text', 'liwc', 'lda', 'location', 'media'], period)
 
 
-if __name__ == "__main__":
-    # main([2, 3, 4, 5, 6, 7, 8, 9, 10])
-    # split_data_to_train_test()
-    get_train_test_windows(5, 0)
+# if __name__ == "__main__":
+#     # main([2, 3, 4, 5, 6, 7, 8, 9, 10])
+#     # split_data_to_train_test()
+#     get_train_test_windows(2, 0)
 
