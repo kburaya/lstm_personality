@@ -93,7 +93,8 @@ class LSTM_model:
                                      "{:.2f}%".format(100 * acc))
                 step += 1
 
-            acc = session.run([self.accuracy], {self.x: test_input, self.y: test_output})
+            _, acc, loss, prediction = session.run([self.optimizer, self.accuracy, self.cost, self.pred],
+                                                   {self.x: test_input, self.y: test_output})
             self.logger.info(
                 'Epoch {:2d} Average Accuracy on test set {:3.1f}%'.format(self.training_iters + 1, 100 * acc))
             session.close()
