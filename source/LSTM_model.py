@@ -66,12 +66,11 @@ class LSTM_model:
 
     def train(self, train_input, train_output, batch_size, test_input, test_output):
         self.logger.info('Train model with: learning_rate=%s\n'
-                         'training_iters=%d\n'
                          'n_hidden=%d\n'
                          'time_periods=%d\n'
                          'batch_size=%d\n'
                          'is_multi_layer=%s\n'
-                         'label=%s' % (str(self.learning_rate), self.training_iters, self.n_hidden, self.n_input,
+                         'label=%s' % (str(self.learning_rate), self.n_hidden, self.n_input,
                                        self.batch_size, str(self.multi_layer), self.MBTI_labels[self.label]))
         # tf.reset_default_graph()
         init = tf.global_variables_initializer()
