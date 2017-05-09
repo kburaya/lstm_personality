@@ -36,8 +36,7 @@ class LSTM_model:
         }
         self.pred, self.cost, self.optimizer, self.accuracy = self.set_optimizers()
 
-    def update_params(self, training_iters, batch_size, label):
-        self.training_iters = training_iters
+    def update_params(self, batch_size, label):
         self.batch_size = batch_size
         self.label = label
 
