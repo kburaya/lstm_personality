@@ -39,6 +39,8 @@ def download_window_data(window_size, mbti_position):
         train_output = pickle.load(open('../store/window_%d/train_output_%d.pkl' % (window_size, mbti_position), 'rb'))
         test_input = pickle.load(open('../store/window_%d/test_input_%d.pkl' % (window_size, mbti_position), 'rb'))
         test_output = pickle.load(open('../store/window_%d/test_output_%d.pkl' % (window_size, mbti_position), 'rb'))
+        logging.info("Found {%d} train samples, {%d} test samples for {%d} period-window" %
+                     (len(train_input), len(test_output), window_size))
         return train_input, test_input, train_output, test_output
     except:
         raise FileNotFoundError('There is no prepared window data!')
@@ -123,8 +125,10 @@ def split_data_to_train_test():
             db['users'].update({'_id': user['_id']}, user)
 
 
-def get_batch(input_data, output_data, batch_size):
-    indexes = random.sample(range(0, len(input_data)), batch_size)
+def get_batch(input_data, output_data, batch_size, offset):
+    if offset + batch_size >= len(output_data):
+        batch_size = len(output_data) - offset - 1
+    indexes = range(offset, offset + batch_size)
     input_batch, output_batch = list(), list()
 
     for i in indexes:

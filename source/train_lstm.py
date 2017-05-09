@@ -26,7 +26,6 @@ def main(args):
         multi_layer = True
     else:
         multi_layer = False
-    training_iters = [5000, 10000, 15000]
     batch_sizes = [16, 32, 64, 128]
 
     model = LSTM_model(learning_rate=learning_rate,
@@ -37,12 +36,11 @@ def main(args):
                        multi_layer=multi_layer)
 
     for label in labels:
-        for training_iter in training_iters:
-            for batch_size in batch_sizes:
-                train_input, test_input, train_output, test_output = \
-                    get_data.get_train_test_windows(windows_size, label)
-                model.update_params(training_iters=training_iter, batch_size=batch_size, label=label)
-                model.train(train_input, train_output, batch_size, test_input, test_output)
+        for batch_size in batch_sizes:
+            train_input, test_input, train_output, test_output = \
+                get_data.get_train_test_windows(windows_size, label)
+            model.update_params(batch_size=batch_size, label=label)
+            model.train(train_input, train_output, batch_size, test_input, test_output)
 
 
 if __name__ == "__main__":
