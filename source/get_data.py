@@ -317,6 +317,26 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
     return train_input, test_input, train_output, test_output
 
 
+def transforn_outputs_to_list(output):
+    # transforms 2-dimensional mbti vector to 1-dimensional for comparison in TF
+    result = list()
+    for i in range(0, len(output)):
+        if output[i][1] == 1:
+            result.append(True)
+        else:
+            result.append(False)
+    return result
+
+
+def transform_int_to_bool(output):
+    result = list()
+    for i in range(0, len(output)):
+        if output[i] == 1:
+            result.append(True)
+        else:
+            result.append(False)
+    return result
+
 def main(args):
     periods = args
     for period in periods:

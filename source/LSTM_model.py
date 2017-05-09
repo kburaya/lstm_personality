@@ -5,6 +5,8 @@ import tensorflow as tf
 from tensorflow.contrib import rnn
 import get_data
 import logging
+from sklearn.metrics import f1_score
+
 
 class LSTM_model:
     def __init__(self, learning_rate, n_hidden, n_input, input_dimension,
@@ -87,13 +89,17 @@ class LSTM_model:
                 offset += batch_size + 1
                 if offset >= len(train_output):
                     # Calculate batch accuracy
-                    acc = session.run(self.accuracy, feed_dict={self.x: test_input, self.y: test_output})
+                    acc, pred = session.run([self.accuracy, self.pred], feed_dict={self.x: test_input, self.y: test_output})
                     # Calculate batch loss
                     loss = session.run(self.cost, feed_dict={self.x: input_batch, self.y: output_batch})
                     self.logger.info("Epoch= " + str(epoch + 1) + ", Average Loss= " + \
                                          "{:.6f}".format(loss) + ", Average Accuracy= " + \
-                                         "{:.2f}%".format(100 * acc))
+                                         "{:.2f}%".format(100 * acc) + ", F-measure= " + \
+                                         "{:.2f}".format(f1_score(tf.argmax(test_output, 1).eval(),
+                                                                   tf.argmax(pred, 1).eval(), average='micro')))
                     epoch += 1
                     offset = 0
 
             session.close()
+
+
