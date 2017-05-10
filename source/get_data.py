@@ -299,7 +299,11 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
         for user in window_users:
             if window_users[user] != n_periods:
                 continue
-            new_id = hashlib.md5(user.encode('utf-8')).hexdigest()
+            try:
+                new_id = hashlib.md5(user.encode('utf-8')).hexdigest()
+            except:
+                logging.info('Exception in user md5 encoding for user {%s}' % user)
+                continue
             users_mapping[new_id] = user
             user = db['users'].find_one({'twitterUserName': user})
             if user is None:
