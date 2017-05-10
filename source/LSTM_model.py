@@ -6,6 +6,8 @@ from tensorflow.contrib import rnn
 import get_data
 import logging
 from sklearn.metrics import f1_score
+from sklearn.metrics import recall_score
+from sklearn.metrics import precision_score
 
 
 class LSTM_model:
@@ -66,7 +68,7 @@ class LSTM_model:
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
         return pred, cost, optimizer, accuracy
 
-    def train(self, train_input, train_output, batch_size, test_input, test_output):
+    def train_one_label(self, train_input, train_output, batch_size, test_input, test_output):
         self.logger.info('Train model with: learning_rate=%s\n'
                          'n_hidden=%d\n'
                          'time_periods=%d\n'
@@ -92,11 +94,22 @@ class LSTM_model:
                     acc, pred = session.run([self.accuracy, self.pred], feed_dict={self.x: test_input, self.y: test_output})
                     # Calculate batch loss
                     loss = session.run(self.cost, feed_dict={self.x: input_batch, self.y: output_batch})
+                    y_true = tf.argmax(test_output, 1).eval()
+                    y_pred = tf.argmax(pred, 1).eval()
                     self.logger.info("Epoch= " + str(epoch + 1) + ", Average Loss= " + \
                                          "{:.6f}".format(loss) + ", Average Accuracy= " + \
-                                         "{:.2f}%".format(100 * acc) + ", F-measure= " + \
-                                         "{:.2f}".format(f1_score(tf.argmax(test_output, 1).eval(),
-                                                                   tf.argmax(pred, 1).eval(), average='micro')))
+                                         "{:.2f}".format(100 * acc) + ", F-measure= " + \
+                                         "{:.2f}".format(f1_score(y_true, y_pred, average='micro')))
+                    self.logger.info("Label " + get_data.get_label_letter(self.label, 0) + ", Recall= " + \
+                                     "{:.3f}".format(recall_score(y_true, y_pred, pos_label=0)) + ", Precision= " + \
+                                     "{:.3f}%".format(precision_score(y_true, y_pred, pos_label=0)) + ", F-measure= " + \
+                                     "{:.3f}".format(f1_score(y_true, y_pred, pos_label=0)))
+                    self.logger.info("Label " + get_data.get_label_letter(self.label, 1) + ", Recall= " + \
+                                     "{:.3f}".format(recall_score(y_true, y_pred, pos_label=1)) + ", Precision= " + \
+                                     "{:.3f}".format(precision_score(y_true, y_pred, pos_label=1)) + ", F-measure= " + \
+                                     "{:.3f}".format(f1_score(y_true, y_pred, pos_label=1)))
+
+
                     epoch += 1
                     offset = 0
 

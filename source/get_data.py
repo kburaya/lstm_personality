@@ -108,6 +108,10 @@ def convert_mbti_to_vector(mbti, mbti_position):
     return mbti_vector[mbti_position]
 
 
+def get_label_letter(mbti_position, label):
+    mbti = ['IE', 'SN', 'TF', 'JP']
+    return mbti[mbti_position][label]
+
 def split_data_to_train_test():
     # split ALL users (table: users) into train(0.8) and test(0.2) sets based on the distribution of their MBTI
     db = connect_to_database(MONGO_HOST, MONGO_PORT, MONGO_DB_RESTORE)

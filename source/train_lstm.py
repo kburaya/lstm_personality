@@ -40,7 +40,7 @@ def main(args):
             train_input, test_input, train_output, test_output = \
                 get_data.get_train_test_windows(windows_size, label)
             model.update_params(batch_size=batch_size, label=label)
-            model.train(train_input, train_output, batch_size, test_input, test_output)
+            model.train_one_label(train_input, train_output, batch_size, test_input, test_output)
 
 
 if __name__ == "__main__":
