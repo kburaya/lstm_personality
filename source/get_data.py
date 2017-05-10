@@ -7,6 +7,7 @@ import hashlib
 import os
 import pickle
 import uuid
+from imblearn.over_sampling import SMOTE
 
 ###
 # Mongo params
@@ -299,11 +300,8 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
         for user in window_users:
             if window_users[user] != n_periods:
                 continue
-            try:
-                new_id = hashlib.md5(user.encode('utf-8')).hexdigest()
-            except:
-                logging.info('Exception in user md5 encoding for user {%s}' % user)
-                continue
+
+            new_id = str(uuid.uuid4())
             users_mapping[new_id] = user
             user = db['users'].find_one({'twitterUserName': user})
             if user is None:
@@ -352,6 +350,13 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
         logging.info('Data successfully saved')
 
     return train_input, test_input, train_output, test_output
+
+
+def apply_oversampling(train_input, test_input, train_output, test_output):
+    sm = SMOTE(random_state=42)
+    train_input_s, train_output_s = sm.fit_sample(train_input, train_output)
+    test_input_s, test_output_s = sm.fit_sample(test_input, test_output)
+    return train_input_s, test_input_s, train_output_s, test_output_s
 
 
 def transforn_outputs_to_list(output):
