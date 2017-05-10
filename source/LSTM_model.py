@@ -82,7 +82,7 @@ class LSTM_model:
             session.run(init)
             epoch = 0
             offset = 0
-            epochs = 30
+            epochs = 1
 
             while epoch < epochs:
                 input_batch, output_batch = get_data.get_batch(train_input, train_output, batch_size, offset)

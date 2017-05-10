@@ -33,14 +33,41 @@ def connect_to_database(host, port, db_name):
     return client[db_name]
 
 
+def get_labels_stats(train_output, test_output, mbti_position):
+    # train_set
+    train_zero, train_one = 0, 0
+    for train_label in train_output:
+        if train_label == [1, 0]:
+            train_zero += 1
+        else:
+            train_one += 1
+    logging.info('Stats for %s/%s label in train set. Number: %d/%d, percentage: %.2f, %.2f' %
+                 (get_label_letter(mbti_position, 0), get_label_letter(mbti_position, 1),
+                  train_zero, train_one,
+                  train_zero/(train_zero + train_one), train_one/(train_zero + train_one)))
+
+    # train_set
+    test_zero, test_one = 0, 0
+    for test_label in test_output:
+        if test_label == [1, 0]:
+            test_zero += 1
+        else:
+            test_one += 1
+    logging.info('Stats for %s/%s label in test set. Number: %d/%d, percentage: %.2f, %.2f' %
+                 (get_label_letter(mbti_position, 0), get_label_letter(mbti_position, 1),
+                  test_zero, test_one,
+                  test_zero / (test_zero + test_one), test_one / (test_zero + test_one)))
+
+
 def download_window_data(window_size, mbti_position):
     try:
         train_input = pickle.load(open('../store/window_%d/train_input_%d.pkl' % (window_size, mbti_position), 'rb'))
         train_output = pickle.load(open('../store/window_%d/train_output_%d.pkl' % (window_size, mbti_position), 'rb'))
         test_input = pickle.load(open('../store/window_%d/test_input_%d.pkl' % (window_size, mbti_position), 'rb'))
         test_output = pickle.load(open('../store/window_%d/test_output_%d.pkl' % (window_size, mbti_position), 'rb'))
-        logging.info("Found {%d} train samples, {%d} test samples for {%d} period-window" %
+        logging.info('Found {%d} train samples, {%d} test samples for {%d} period-window' %
                      (len(train_input), len(test_output), window_size))
+        get_labels_stats(train_output, test_output, mbti_position)
         return train_input, test_input, train_output, test_output
     except:
         raise FileNotFoundError('There is no prepared window data!')
@@ -109,8 +136,9 @@ def convert_mbti_to_vector(mbti, mbti_position):
 
 
 def get_label_letter(mbti_position, label):
-    mbti = ['IE', 'SN', 'TF', 'JP']
+    mbti = ['EI', 'NS', 'FT', 'PJ']
     return mbti[mbti_position][label]
+
 
 def split_data_to_train_test():
     # split ALL users (table: users) into train(0.8) and test(0.2) sets based on the distribution of their MBTI
@@ -308,6 +336,7 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
 
     train_input, test_input, train_output, test_output = input_output_generation(train_input, test_input,
                                                                                  train_output, test_output, n_periods)
+    get_labels_stats(train_output, test_output, mbti_position)
     if store:
         logging.info('Saving data...')
         if not os.path.exists('../store/window_%d' % n_periods):
