@@ -26,7 +26,7 @@ def main(args):
         multi_layer = True
     else:
         multi_layer = False
-    batch_sizes = [16, 32, 64, 128]
+    batch_sizes = [128]
 
     model = LSTM_model(learning_rate=learning_rate,
                        n_hidden=n_hidden,
@@ -39,8 +39,8 @@ def main(args):
         for batch_size in batch_sizes:
             train_input, test_input, train_output, test_output = \
                 get_data.get_train_test_windows(windows_size, label)
-            train_input, test_input, train_output, test_output = \
-                get_data.apply_oversampling(train_input, test_input, train_output, test_output)
+            # train_input, test_input, train_output, test_output = \
+            #     get_data.apply_oversampling(train_input, test_input, train_output, test_output)
             model.update_params(batch_size=batch_size, label=label)
             model.train_one_label(train_input, train_output, batch_size, test_input, test_output)
 

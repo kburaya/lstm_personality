@@ -46,7 +46,7 @@ class LSTM_model:
 
     def RNN(self):
         if not self.multi_layer:
-            rnn_cell = rnn.BasicLSTMCell(self.n_hidden)
+            rnn_cell = rnn.LSTMCell(self.n_hidden)
         else:
             rnn_cell_f = rnn.BasicLSTMCell(self.n_hidden)
             rnn_cell_s = rnn.BasicLSTMCell(self.n_hidden)
@@ -77,6 +77,7 @@ class LSTM_model:
                          'label=%s' % (str(self.learning_rate), self.n_hidden, self.n_input,
                                        self.batch_size, str(self.multi_layer), self.MBTI_labels[self.label]))
         # tf.reset_default_graph()
+        saver = tf.train.Saver()
         init = tf.global_variables_initializer()
         with tf.Session() as session:
             session.run(init)
@@ -112,7 +113,9 @@ class LSTM_model:
 
                     epoch += 1
                     offset = 0
-
+            save_path = saver.save(session, "/models/%d_%d_%d.ckpt" %
+                                   (self.n_hidden, self.n_input, self.label))
+            print("Model saved in file: %s" % save_path)
             session.close()
 
 
