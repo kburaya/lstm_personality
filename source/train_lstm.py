@@ -3,6 +3,9 @@ import sys
 sys.path.insert(0, '../source')
 import get_data
 from LSTM_model import LSTM_model
+import logging
+from sklearn.metrics import f1_score, precision_score, recall_score
+import pickle
 
 # Features dimensions
 TEXT_DIM = 53
@@ -37,13 +40,45 @@ def main(args):
 
     for label in labels:
         for batch_size in batch_sizes:
-            train_input, test_input, train_output, test_output = \
+            train_input, test_input, train_output, test_output, users_mapping, test_uuids = \
                 get_data.get_train_test_windows(windows_size, label)
             # train_input, test_input, train_output, test_output = \
             #     get_data.apply_oversampling(train_input, test_input, train_output, test_output)
             model.update_params(batch_size=batch_size, label=label)
-            model.train_one_label(train_input, train_output, batch_size, test_input, test_output)
+            predictions = model.train_one_label(train_input, train_output, batch_size, test_input, test_output, label)
+            y_pred = get_test_accuracy(users_mapping, test_uuids, test_output, predictions, windows_size, label)
+            pickle.dump("../models/%d_%d_%d.ckpt" %
+                                   (n_hidden, windows_size, label))
 
+
+def get_test_accuracy(users_mapping, test_uuids, y_true, predictions, periods, label):
+    threshold = float(periods/2)
+    test_pred = dict()
+
+    for (prediction, user_uuid) in zip(predictions, test_uuids):
+        real_name = users_mapping[user_uuid]
+        if real_name not in test_pred:
+            test_pred[real_name] = 0
+        test_pred[real_name] += predictions
+
+    y_pred = list()
+    for user in test_pred:
+        if test_pred[user] > threshold:
+            y_pred.append(1)
+        else:
+            y_pred[user].append(0)
+
+    logging.info("FINAL LABEL RESULTS ON TEST SET")
+    logging.info("Label " + get_data.get_label_letter(label, 0) + ", Precision= " + \
+                     "{:.3f}%".format(precision_score(y_true, y_pred, pos_label=0)) + ", Recall= " + \
+                     "{:.3f}".format(recall_score(y_true, y_pred, pos_label=0)) + ", F-measure= " + \
+                     "{:.3f}".format(f1_score(y_true, y_pred, pos_label=0)))
+    logging.info("Label " + get_data.get_label_letter(label, 1) + ", Precision= " + \
+                 "{:.3f}%".format(precision_score(y_true, y_pred, pos_label=1)) + ", Recall= " + \
+                 "{:.3f}".format(recall_score(y_true, y_pred, pos_label=1)) + ", F-measure= " + \
+                 "{:.3f}".format(f1_score(y_true, y_pred, pos_label=1)))
+
+    return y_pred
 
 if __name__ == "__main__":
     main(sys.argv[1:])

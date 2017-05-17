@@ -8,6 +8,7 @@ import logging
 from sklearn.metrics import f1_score
 from sklearn.metrics import recall_score
 from sklearn.metrics import precision_score
+import pickle
 
 
 class LSTM_model:
@@ -76,14 +77,13 @@ class LSTM_model:
                          'is_multi_layer=%s\n'
                          'label=%s' % (str(self.learning_rate), self.n_hidden, self.n_input,
                                        self.batch_size, str(self.multi_layer), self.MBTI_labels[self.label]))
-        # tf.reset_default_graph()
-        saver = tf.train.Saver()
         init = tf.global_variables_initializer()
         with tf.Session() as session:
+            saver = tf.train.Saver()
             session.run(init)
             epoch = 0
             offset = 0
-            epochs = 100
+            epochs = 50
 
             while epoch < epochs:
                 input_batch, output_batch = get_data.get_batch(train_input, train_output, batch_size, offset)
@@ -113,9 +113,11 @@ class LSTM_model:
 
                     epoch += 1
                     offset = 0
-            save_path = saver.save(session, "/models/%d_%d_%d.ckpt" %
+
+            save_path = saver.save(session, "../models/%d_%d_%d.ckpt" %
                                    (self.n_hidden, self.n_input, self.label))
             print("Model saved in file: %s" % save_path)
             session.close()
+            return y_pred
 
 

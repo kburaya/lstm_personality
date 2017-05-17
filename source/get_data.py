@@ -24,8 +24,8 @@ MEDIA_DIM = 1000
 PERIODS = 10
 ###
 features_dim = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM
-logging.basicConfig(filename='%s.log' % str(uuid.uuid4()), filemode='w', level=logging.DEBUG, format='%(asctime)s %(message)s')
-hash_maker = hashlib.md5()
+logging.basicConfig(filename='logs/%s.log' % str(uuid.uuid4()), filemode='w', level=logging.DEBUG,
+                    format='%(asctime)s %(message)s')
 
 
 def connect_to_database(host, port, db_name):
@@ -66,10 +66,14 @@ def download_window_data(window_size, mbti_position):
         train_output = pickle.load(open('../store/window_%d/train_output_%d.pkl' % (window_size, mbti_position), 'rb'))
         test_input = pickle.load(open('../store/window_%d/test_input_%d.pkl' % (window_size, mbti_position), 'rb'))
         test_output = pickle.load(open('../store/window_%d/test_output_%d.pkl' % (window_size, mbti_position), 'rb'))
+        users_mapping = pickle.load(test_output, open('../store/window_%d/users_mapping_%d.pkl' %
+                                                      (window_size, mbti_position), 'rb'))
+        test_uuids = pickle.load(test_output, open('../store/window_%d/test_uuids_%d.pkl' %
+                                                      (window_size, mbti_position), 'rb'))
         logging.info('Found {%d} train samples, {%d} test samples for {%d} period-window' %
                      (len(train_input), len(test_output), window_size))
         get_labels_stats(train_output, test_output, mbti_position)
-        return train_input, test_input, train_output, test_output
+        return train_input, test_input, train_output, test_output, users_mapping, test_uuids
     except:
         raise FileNotFoundError('There is no prepared window data!')
 
@@ -282,6 +286,7 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
     users_mapping = dict()  # map md5(user) -> user
     train_output, test_output = dict(), dict()  # dict md5(user) -> MBTI_vector
     train_input, test_input = dict(), dict()  # dict md5(user) -> dict period -> features
+    test_uuids = list()  # list to know the order of uuid of test users
     logging.info('Begin to collect data for %d-windows' % n_periods)
     # get all users
     for i in range(1, PERIODS):
@@ -332,6 +337,7 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
                             test_input[new_id][window_period].append(features[feature])
                     window_period += 1
                 test_output[new_id] = convert_mbti_to_vector(user['mbti'], mbti_position)
+                test_uuids.append(new_id)
 
     logging.info("Found {%d} train samples, {%d} test samples for {%d} period-window" %
                  (len(train_input), len(test_output), n_periods))
@@ -347,9 +353,11 @@ def get_train_test_windows(n_periods, mbti_position, store=True):
         pickle.dump(train_output, open('../store/window_%d/train_output_%d.pkl' % (n_periods, mbti_position), 'wb'))
         pickle.dump(test_input, open('../store/window_%d/test_input_%d.pkl' % (n_periods, mbti_position), 'wb'))
         pickle.dump(test_output, open('../store/window_%d/test_output_%d.pkl' % (n_periods, mbti_position), 'wb'))
+        pickle.dump(users_mapping, open('../store/window_%d/users_mapping_%d.pkl' % (n_periods, mbti_position), 'wb'))
+        pickle.dump(test_uuids, open('../store/window_%d/test_uuids_%d.pkl' % (n_periods, mbti_position), 'wb'))
         logging.info('Data successfully saved')
 
-    return train_input, test_input, train_output, test_output
+    return train_input, test_input, train_output, test_output, users_mapping, test_uuids
 
 
 def apply_oversampling(train_input, test_input, train_output, test_output):
@@ -378,6 +386,7 @@ def transform_int_to_bool(output):
         else:
             result.append(False)
     return result
+
 
 def main(args):
     periods = args
