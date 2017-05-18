@@ -1,5 +1,4 @@
 import sys
-
 sys.path.insert(0, '../source')
 import tensorflow as tf
 from tensorflow.contrib import rnn

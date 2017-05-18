@@ -1,11 +1,11 @@
 import sys
-
 sys.path.insert(0, '../source')
 import get_data
 from LSTM_model import LSTM_model
 import logging
 from sklearn.metrics import f1_score, precision_score, recall_score
 import pickle
+import numpy as np
 
 # Features dimensions
 TEXT_DIM = 53
@@ -40,33 +40,40 @@ def main(args):
 
     for label in labels:
         for batch_size in batch_sizes:
-            train_input, test_input, train_output, test_output, users_mapping, test_uuids = \
-                get_data.get_train_test_windows(windows_size, label)
-            # train_input, test_input, train_output, test_output = \
-            #     get_data.apply_oversampling(train_input, test_input, train_output, test_output)
-            model.update_params(batch_size=batch_size, label=label)
-            predictions = model.train_one_label(train_input, train_output, batch_size, test_input, test_output, label)
-            y_pred = get_test_accuracy(users_mapping, test_uuids, test_output, predictions, windows_size, label)
-            pickle.dump("../models/%d_%d_%d.ckpt" %
-                                   (n_hidden, windows_size, label))
+            # train_input, test_input, train_output, test_output, users_mapping, test_uuids = \
+            #     get_data.get_train_test_windows(windows_size, label)
+            # # train_input, test_input, train_output, test_output = \
+            # #     get_data.apply_oversampling(train_input, test_input, train_output, test_output)
+            # model.update_params(batch_size=batch_size, label=label)
+            # predictions = model.train_one_label(train_input, train_output, batch_size, test_input, test_output)
+            y_pred = get_test_accuracy(windows_size, label)
+            pickle.dump(y_pred, open("../predictions/%d_%d_%d.ckpt" % (n_hidden, windows_size, label), 'wb'))
 
 
-def get_test_accuracy(users_mapping, test_uuids, y_true, predictions, periods, label):
-    threshold = float(periods/2)
+def get_test_accuracy(window_size, label):
+    threshold = float(window_size / 2)
     test_pred = dict()
 
+    users_mapping = pickle.load(open('../store/window_%d/users_mapping_%d.pkl' % (window_size, label), 'rb'))
+    test_uuids = pickle.load(open('../store/window_%d/test_uuids_%d.pkl' % (window_size, label), 'rb'))
+    predictions = pickle.load(open('../store/window_%d/test_output_%d.pkl' % (window_size, label), 'rb'))
+
+    db = get_data.connect_to_database(get_data.MONGO_HOST, get_data.MONGO_PORT, get_data.MONGO_DB_RESTORE)
     for (prediction, user_uuid) in zip(predictions, test_uuids):
         real_name = users_mapping[user_uuid]
         if real_name not in test_pred:
             test_pred[real_name] = 0
-        test_pred[real_name] += predictions
+        test_pred[real_name] = test_pred[real_name] + int(np.argmax(prediction))
 
-    y_pred = list()
+    y_pred, y_true = list(), list()
+
     for user in test_pred:
         if test_pred[user] > threshold:
             y_pred.append(1)
         else:
-            y_pred[user].append(0)
+            y_pred.append(0)
+        y_true.append(get_data.get_label_int(
+            db['users'].find_one({'twitterUserName': user})['mbti'][label]))
 
     logging.info("FINAL LABEL RESULTS ON TEST SET")
     logging.info("Label " + get_data.get_label_letter(label, 0) + ", Precision= " + \
