@@ -121,7 +121,7 @@ def get_period_data(n_periods, features_types, db, features_dim):
     return output
 
 
-def convert_mbti_to_vector0(mbti, mbti_position):
+def convert_mbti_to_vector(mbti, mbti_position):
     """
     convert mbti to 2-dimensional vector representation
     the label is argmax of 2-dim vector
@@ -210,7 +210,6 @@ def fill_missed_modality(period, label):
 
     users_features = list()  # the order of users will be the same as in users list
     features_order = dict()  # the order of features will be the same for (modality, label)
-    feature_vector = list()
     for modality in modalities:
         features_order[modality] = list()
     incomplete_dimensions = 0
