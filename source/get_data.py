@@ -198,11 +198,11 @@ def fill_missed_modality(period, label):
     need to know the order of features to write them into database then
     store all features in one vector as a result"""
     db = connect_to_database(MONGO_HOST, MONGO_PORT, MONGO_DB)
-    modalities = ['text', 'liwc', 'lda', 'location', 'media']
+    modalities = ['text', 'liwc', 'lda', 'media', 'location']
     modalities_dimensions = [26, 32, 25, 44, 50]
     period_users = list()  # all active users in any social network for this period
     for modality in modalities:
-        logging.info('Get users for %s modalitiy' % modality)
+        logging.info('Get users for %s modalitity' % modality)
         users = db['fs_%s_%d_%d' % (modality, period, label)].distinct('_id')
         for user in users:
             if user not in period_users:
@@ -216,6 +216,7 @@ def fill_missed_modality(period, label):
     incomplete_dimensions = 0
 
     for user in period_users:
+        feature_vector = list()
         for modality, dimension in zip(modalities, modalities_dimensions):
             features = db['fs_%s_%d_%d' % (modality, period, label)].find_one({'_id': user})
             if features is None:
@@ -239,7 +240,7 @@ def fill_missed_modality(period, label):
     H = model.components_
     transformed_data = np.dot(W, H)
 
-    db_restore = connect_to_database(MONGO_HOST, MONGO_PORT, MONGO_DB + '_restore')
+    db_restore = connect_to_database(MONGO_HOST, MONGO_PORT, MONGO_DB)
     for user in period_users:
         sum_dimension = 0
         user_position = period_users.index(user)
