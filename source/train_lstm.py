@@ -29,7 +29,7 @@ def main(args):
         multi_layer = True
     else:
         multi_layer = False
-    batch_sizes = [64]
+    batch_sizes = [32]
 
     model = LSTM_model(learning_rate=learning_rate,
                        n_hidden=n_hidden,
@@ -42,8 +42,6 @@ def main(args):
         for batch_size in batch_sizes:
             train_input, test_input, train_output, test_output, users_mapping, test_uuids = \
                 get_data.get_train_test_windows(windows_size, label)
-            # train_input, test_input, train_output, test_output = \
-            #     get_data.apply_oversampling(train_input, test_input, train_output, test_output)
             model.update_params(batch_size=batch_size, label=label)
             predictions = model.train_one_label(train_input, train_output, batch_size, test_input, test_output)
             y_pred = get_prediction_from_lstm_output(predictions, windows_size, label)
