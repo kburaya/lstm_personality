@@ -11,7 +11,7 @@ from imblearn.over_sampling import SMOTE
 ###
 # Mongo params
 MONGO_PORT = 27017
-MONGO_HOST = 'localhost'
+MONGO_HOST = '172.29.29.30'
 MONGO_DB = 'mbti_research_fs'
 # Features full dimensions
 TEXT_DIM = 53
@@ -32,6 +32,7 @@ def init_logging(filename = None):
     print ('logs located in %s' % filename)
     logging.basicConfig(filename=filename, filemode='w+', level=logging.DEBUG,
                         format='%(asctime)s %(message)s')
+    return logging
 
 
 def connect_to_database(host, port, db_name):
@@ -66,59 +67,22 @@ def get_labels_stats(train_output, test_output, mbti_position):
                   test_zero / (test_zero + test_one), test_one / (test_zero + test_one)))
 
 
-def download_window_data(window_size, mbti_position):
+def download_window_data(window_size, label):
     try:
-        train_input = pickle.load(open('../store/window_%d/train_input_%d.pkl' % (window_size, mbti_position), 'rb'))
-        train_output = pickle.load(open('../store/window_%d/train_output_%d.pkl' % (window_size, mbti_position), 'rb'))
-        test_input = pickle.load(open('../store/window_%d/test_input_%d.pkl' % (window_size, mbti_position), 'rb'))
-        test_output = pickle.load(open('../store/window_%d/test_output_%d.pkl' % (window_size, mbti_position), 'rb'))
+        train_input = pickle.load(open('../store/window_%d/train_input_%d.pkl' % (window_size, label), 'rb'))
+        train_output = pickle.load(open('../store/window_%d/train_output_%d.pkl' % (window_size, label), 'rb'))
+        test_input = pickle.load(open('../store/window_%d/test_input_%d.pkl' % (window_size, label), 'rb'))
+        test_output = pickle.load(open('../store/window_%d/test_output_%d.pkl' % (window_size, label), 'rb'))
         users_mapping = pickle.load(open('../store/window_%d/users_mapping_%d.pkl' %
-                                                      (window_size, mbti_position), 'rb'))
+                                         (window_size, label), 'rb'))
         test_uuids = pickle.load(open('../store/window_%d/test_uuids_%d.pkl' %
-                                                      (window_size, mbti_position), 'rb'))
+                                      (window_size, label), 'rb'))
         logging.info('Found {%d} train samples, {%d} test samples for {%d} period-window' %
                      (len(train_input), len(test_output), window_size))
-        get_labels_stats(train_output, test_output, mbti_position)
+        get_labels_stats(train_output, test_output, label)
         return train_input, test_input, train_output, test_output, users_mapping, test_uuids
     except:
         raise FileNotFoundError('There is no prepared window data!')
-
-
-def get_period_data(n_periods, features_types, db, features_dim):
-    # get period data from db
-    # return period data, where all the users have the data in every period
-    # the format for name of period collections in db: [modality]_[period_number]_[features_type]
-    periods_data = dict()
-    db = connect_to_database(MONGO_HOST, MONGO_PORT, db)
-    for period_number in range(1, n_periods + 1):
-        logging.info('Getting data for {%d} period in begin' % period_number)
-        period_flags = list()
-        for features_type in features_types:
-            collection = 'MBTI_%d_%s' % (period_number, features_type)
-            period_users = db[collection].find()
-            for user in period_users:
-                if user['_id'] not in periods_data:
-                    periods_data[user['_id']] = list()
-                user_features = list()
-                for feature in user:
-                    if feature != '_id':
-                        user_features.append(user[feature])
-                if user['_id'] not in period_flags:
-                    periods_data[user['_id']].append(list())
-                    period_flags.append(user['_id'])
-                periods_data[user['_id']][len(periods_data[user['_id']]) - 1].extend(user_features)
-
-    output = dict()
-    for user in periods_data:
-        if len(periods_data[user]) == n_periods:
-            add = True
-            for period_features in periods_data[user]:
-                if len(period_features) != features_dim:
-                    add = False
-            if add:
-                output[user] = periods_data[user]
-    logging.info("Find {%d} users in {%d} periods" % (len(output), n_periods))
-    return output
 
 
 def convert_mbti_to_vector(mbti, mbti_position):
@@ -320,7 +284,7 @@ def get_train_test_windows(n_periods, label, store=True):
         logging.info('Getting data for %d period in the beginning' % i)
         window_users = dict()
         for p in range(0, n_periods):
-            period_users = db['period_%d' % (i + p)].find()
+            period_users = db['period_%d_%d' % (p+i, label)].find()
             for user in period_users:
                 if user['_id'] not in window_users:
                     window_users[user['_id']] = 1
@@ -343,7 +307,7 @@ def get_train_test_windows(n_periods, label, store=True):
                 train_output[new_id] = dict()
                 window_period = 1
                 for p in range(i, i + n_periods):
-                    features = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
+                    features = db['period_%d_%d' % (p, label)].find_one({'_id': user['twitterUserName']})
                     if len(features_order) == 0:
                         features_order = list(features.keys())
                         features_order.remove('_id')
@@ -358,10 +322,12 @@ def get_train_test_windows(n_periods, label, store=True):
                 test_output[new_id] = dict()
                 window_period = 1
                 for p in range(i, i + n_periods):
-                    features = db['period_%d' % p].find_one({'_id': user['twitterUserName']})
+                    features = db['period_%d_%d' % (p, label)].find_one({'_id': user['twitterUserName']})
+                    if len(features_order) == 0:
+                        features_order = list(features.keys())
+                        features_order.remove('_id')
                     test_input[new_id][window_period] = list()
-                    for feature in features:
-                        if feature != '_id':
+                    for feature in features_order:
                             test_input[new_id][window_period].append(features[feature])
                     window_period += 1
                 test_output[new_id] = convert_mbti_to_vector(user['mbti'], label)
@@ -388,32 +354,10 @@ def get_train_test_windows(n_periods, label, store=True):
     return train_input, test_input, train_output, test_output, users_mapping, test_uuids
 
 
-def apply_oversampling(train_input, test_input, train_output, test_output):
+def apply_oversampling(train_input, train_output, label):
     sm = SMOTE(random_state=42)
-    train_input_s, train_output_s = sm.fit_sample(train_input, train_output)
-    test_input_s, test_output_s = sm.fit_sample(test_input, test_output)
-    return train_input_s, test_input_s, train_output_s, test_output_s
-
-
-def transform_int_to_bool(output):
-    result = list()
-    for i in range(0, len(output)):
-        if output[i] == 1:
-            result.append(True)
-        else:
-            result.append(False)
-    return result
-
-
-def main():
-    init_logging('fill_periods')
-    logging.info('Begin to fill miss data in periods')
-    for period in range(1, 11):
-        for label in range(0, 4):
-            fill_missed_modality(period, label)
-        store_modalities_in_one_vector(['text', 'liwc', 'lda', 'location', 'media'], period)
-
-
-if __name__ == "__main__":
-    main()
-
+    train_output_int = list()
+    for output in train_output:
+        train_output_int.append(np.argmax(output))
+    train_input_s, train_output_s = sm.fit_sample(train_input, train_output_int)
+    return train_input_s, train_output_s

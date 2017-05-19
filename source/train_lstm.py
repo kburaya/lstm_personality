@@ -16,7 +16,7 @@ MEDIA_DIM = 1000
 
 learning_rate = 0.001
 display_step = 1000
-input_dimension = TEXT_DIM + LIWC_DIM + LDA_DIM + LOCATION_DIM + MEDIA_DIM  # number of features
+input_dimension = 177  # number of features
 
 
 def main(args):
@@ -29,7 +29,7 @@ def main(args):
         multi_layer = True
     else:
         multi_layer = False
-    batch_sizes = [128]
+    batch_sizes = [64]
 
     model = LSTM_model(learning_rate=learning_rate,
                        n_hidden=n_hidden,
@@ -40,52 +40,87 @@ def main(args):
 
     for label in labels:
         for batch_size in batch_sizes:
-            # train_input, test_input, train_output, test_output, users_mapping, test_uuids = \
-            #     get_data.get_train_test_windows(windows_size, label)
-            # # train_input, test_input, train_output, test_output = \
-            # #     get_data.apply_oversampling(train_input, test_input, train_output, test_output)
-            # model.update_params(batch_size=batch_size, label=label)
-            # predictions = model.train_one_label(train_input, train_output, batch_size, test_input, test_output)
-            y_pred = get_test_accuracy(windows_size, label)
+            train_input, test_input, train_output, test_output, users_mapping, test_uuids = \
+                get_data.get_train_test_windows(windows_size, label)
+            # train_input, test_input, train_output, test_output = \
+            #     get_data.apply_oversampling(train_input, test_input, train_output, test_output)
+            model.update_params(batch_size=batch_size, label=label)
+            predictions = model.train_one_label(train_input, train_output, batch_size, test_input, test_output)
+            y_pred = get_prediction_from_lstm_output(predictions, windows_size, label)
+            log_accuracy(get_test_groundtruth(label), y_pred, label)
             pickle.dump(y_pred, open("../predictions/%d_%d_%d.ckpt" % (n_hidden, windows_size, label), 'wb'))
 
 
-def get_test_accuracy(window_size, label):
-    threshold = float(window_size / 2)
-    test_pred = dict()
+def get_test_groundtruth(label):
+    db = get_data.connect_to_database(get_data.MONGO_HOST, get_data.MONGO_PORT, get_data.MONGO_DB)
+    try:
+        test_groundtruth = pickle.load(open('../store/test_groundtruth_%d.pkl' % label, 'rb'))
+        return test_groundtruth
+    except FileNotFoundError:
+        try:
+            test_users_order = pickle.load(open('../store/test_users_order.pkl', 'rb'))
+        except FileNotFoundError:
+            test_users_order = db['users'].distinct('twitterUserName')
+            pickle.dump(test_users_order, open('../store/test_users_order.pkl', 'wb'))
+
+        test_groundtruth = list()
+        for user in test_users_order:
+            test_groundtruth.append(get_data.get_label_int(
+                db['users'].find_one({'twitterUserName': user})['mbti'][label]))
+        pickle.dump(test_groundtruth, open('../store/test_groundtruth_%d.pkl' % label, 'wb'))
+        return test_groundtruth
+
+
+def get_prediction_from_lstm_output(predictions, window_size, label):
+    test_pred, user_windows_num = dict(), dict()
+    db = get_data.connect_to_database(get_data.MONGO_HOST, get_data.MONGO_PORT, get_data.MONGO_DB)
 
     users_mapping = pickle.load(open('../store/window_%d/users_mapping_%d.pkl' % (window_size, label), 'rb'))
     test_uuids = pickle.load(open('../store/window_%d/test_uuids_%d.pkl' % (window_size, label), 'rb'))
-    predictions = pickle.load(open('../store/window_%d/test_output_%d.pkl' % (window_size, label), 'rb'))
 
-    db = get_data.connect_to_database(get_data.MONGO_HOST, get_data.MONGO_PORT, get_data.MONGO_DB_RESTORE)
+    try:
+        test_users_order = pickle.load(open('../store/test_users_order.pkl', 'rb'))
+    except:
+        test_users_order = db['users'].distinct('twitterUserName')
+        pickle.dump(test_users_order, open('../store/test_users_order.pkl', 'wb'))
+
+    target_labels = [1, 0, 0, 0]
+    target_label = target_labels[label]
+
     for (prediction, user_uuid) in zip(predictions, test_uuids):
         real_name = users_mapping[user_uuid]
         if real_name not in test_pred:
             test_pred[real_name] = 0
-        test_pred[real_name] = test_pred[real_name] + int(np.argmax(prediction))
+            user_windows_num[real_name] = 0
+        test_pred[real_name] = test_pred[real_name] + prediction
+        user_windows_num[real_name] += 1
 
-    y_pred, y_true = list(), list()
-
-    for user in test_pred:
-        if test_pred[user] > threshold:
-            y_pred.append(1)
+    y_pred= list()
+    for user in test_users_order:
+        if user in test_pred:
+            if test_pred[user] > user_windows_num[user]:
+                y_pred.append(1)
+            elif test_pred[user] < user_windows_num[user]:
+                y_pred.append(0)
+            else:
+                y_pred.append(target_label)
         else:
-            y_pred.append(0)
-        y_true.append(get_data.get_label_int(
-            db['users'].find_one({'twitterUserName': user})['mbti'][label]))
+            y_pred.append(target_label)
+    return y_pred
 
+
+
+def log_accuracy(y_true, y_pred, label):
     logging.info("FINAL LABEL RESULTS ON TEST SET")
     logging.info("Label " + get_data.get_label_letter(label, 0) + ", Precision= " + \
                      "{:.3f}%".format(precision_score(y_true, y_pred, pos_label=0)) + ", Recall= " + \
                      "{:.3f}".format(recall_score(y_true, y_pred, pos_label=0)) + ", F-measure= " + \
                      "{:.3f}".format(f1_score(y_true, y_pred, pos_label=0)))
     logging.info("Label " + get_data.get_label_letter(label, 1) + ", Precision= " + \
-                 "{:.3f}%".format(precision_score(y_true, y_pred, pos_label=1)) + ", Recall= " + \
+                 "{:.3f}".format(precision_score(y_true, y_pred, pos_label=1)) + ", Recall= " + \
                  "{:.3f}".format(recall_score(y_true, y_pred, pos_label=1)) + ", F-measure= " + \
                  "{:.3f}".format(f1_score(y_true, y_pred, pos_label=1)))
 
-    return y_pred
 
 if __name__ == "__main__":
     main(sys.argv[1:])
