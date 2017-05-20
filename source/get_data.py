@@ -260,6 +260,29 @@ def input_output_generation(train_input, test_input, train_output, test_output, 
     return train_i, test_i, train_o, test_o
 
 
+def apply_oversampling(train_i, train_o, n_periods):
+    logging.info('Applying oversampling')
+    train_size = len(train_i)
+    smote = SMOTE(random_state=42)
+    for p in range(0, n_periods):
+        input_vectors, output_vectors = list(), list()
+        for i in range(0, train_size):
+            input_vectors.append(train_i[i][p])
+            output_vectors.append(np.argmax(train_o[i]))
+        _input, _output = smote.fit_sample(input_vectors, output_vectors)
+        for i in range(train_size, len(_input)):
+            if len(train_i) < len(_input):
+                train_i.append(list())
+            train_i[i].append(list(_input[i]))
+    for i in range(len(train_o), len(_output)):
+        if _output[i] == 0:
+            train_o.append([1, 0])
+        else:
+            train_o.append([0, 1])
+    return train_i, train_o
+
+
+
 def get_train_test_windows(n_periods, label, store=True):
     try:
         return download_window_data(n_periods, label)
@@ -352,12 +375,3 @@ def get_train_test_windows(n_periods, label, store=True):
         logging.info('Data successfully saved')
 
     return train_input, test_input, train_output, test_output, users_mapping, test_uuids
-
-
-def apply_oversampling(train_input, train_output, label):
-    sm = SMOTE(random_state=42)
-    train_output_int = list()
-    for output in train_output:
-        train_output_int.append(np.argmax(output))
-    train_input_s, train_output_s = sm.fit_sample(train_input, train_output_int)
-    return train_input_s, train_output_s

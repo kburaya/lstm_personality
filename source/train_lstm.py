@@ -42,6 +42,7 @@ def main(args):
         for batch_size in batch_sizes:
             train_input, test_input, train_output, test_output, users_mapping, test_uuids = \
                 get_data.get_train_test_windows(windows_size, label)
+            train_input, train_output = get_data.apply_oversampling(train_input, train_output, windows_size)
             model.update_params(batch_size=batch_size, label=label)
             predictions = model.train_one_label(train_input, train_output, batch_size, test_input, test_output)
             y_pred = get_prediction_from_lstm_output(predictions, windows_size, label)
@@ -93,12 +94,12 @@ def get_prediction_from_lstm_output(predictions, window_size, label):
         test_pred[real_name] = test_pred[real_name] + prediction
         user_windows_num[real_name] += 1
 
-    y_pred= list()
+    y_pred = list()
     for user in test_users_order:
         if user in test_pred:
-            if test_pred[user] > user_windows_num[user]:
+            if test_pred[user] > user_windows_num[user] / 2:
                 y_pred.append(1)
-            elif test_pred[user] < user_windows_num[user]:
+            elif test_pred[user] < user_windows_num[user] / 2:
                 y_pred.append(0)
             else:
                 y_pred.append(target_label)
@@ -111,7 +112,7 @@ def get_prediction_from_lstm_output(predictions, window_size, label):
 def log_accuracy(y_true, y_pred, label):
     logging.info("FINAL LABEL RESULTS ON TEST SET")
     logging.info("Label " + get_data.get_label_letter(label, 0) + ", Precision= " + \
-                     "{:.3f}%".format(precision_score(y_true, y_pred, pos_label=0)) + ", Recall= " + \
+                     "{:.3f}".format(precision_score(y_true, y_pred, pos_label=0)) + ", Recall= " + \
                      "{:.3f}".format(recall_score(y_true, y_pred, pos_label=0)) + ", F-measure= " + \
                      "{:.3f}".format(f1_score(y_true, y_pred, pos_label=0)))
     logging.info("Label " + get_data.get_label_letter(label, 1) + ", Precision= " + \
